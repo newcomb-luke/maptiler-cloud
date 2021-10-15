@@ -13,7 +13,11 @@ async fn get_tile() {
     // that contains the world
     let tile_request = TileRequest::new(TileSet::Satellite, 0, 0, 0).unwrap();
 
-    let tile = maptiler.request(tile_request).await.unwrap();
+    // Create the request using the Maptiler session
+    let constructed = maptiler.create_request(tile_request);
+
+    // Actually perform the request to get the data
+    let tile = constructed.execute().await.unwrap();
 
     // Check for JPEG file magic
     assert_eq!(&tile[0..3], &[0xFF, 0xD8, 0xFF]);

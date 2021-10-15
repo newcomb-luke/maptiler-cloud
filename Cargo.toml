@@ -1,6 +1,6 @@
 [package]
 name = "maptiler-cloud"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 description = "A simple Rust wrapper library around the Maptiler Cloud API"
 license = "MIT"

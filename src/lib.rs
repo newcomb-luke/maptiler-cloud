@@ -26,8 +26,11 @@ use std::fmt::Display;
 ///         zoom
 ///     ).unwrap();
 ///
-///     // Perform the request (make the API call)
-///     let satellite_jpg = maptiler.request(tile_request).await.unwrap();
+///     // Create the request using the Maptiler session
+///     let constructed = maptiler.create_request(tile_request);
+///
+///     // Actually perform the request to get the data
+///     let satellite_jpg = constructed.execute().await.unwrap();
 ///
 ///     // Check for JPEG file magic to make sure we got an image
 ///     assert_eq!(&satellite_jpg[0..3], &[0xFF, 0xD8, 0xFF]);
@@ -243,7 +246,7 @@ impl Display for TileSet {
 }
 
 /// A struct containing the arguments required to make a request for a tile
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TileRequest {
     set: TileSet,
     zoom: u32,
@@ -339,8 +342,49 @@ impl From<TileRequest> for RequestType {
 }
 
 /// The type of request to the Maptiler Cloud API
+#[derive(Debug, Copy, Clone)]
 pub enum RequestType {
     TileRequest(TileRequest),
+}
+
+/// Represents a request that has already been constructed using the Maptiler that created it. This
+/// can be directly await-ed using execute()
+#[derive(Debug, Clone)]
+pub struct ConstructedRequest {
+    api_key: String,
+    inner: RequestType,
+}
+
+impl ConstructedRequest {
+    /// Actually performs the API call to the Maptiler Cloud API
+    pub async fn execute(&self) -> Result<Vec<u8>, errors::Error> {
+        match self.inner {
+            RequestType::TileRequest(tile_request) => self.execute_tile(tile_request).await,
+        }
+    }
+
+    async fn execute_tile(&self, tile_request: TileRequest) -> Result<Vec<u8>, errors::Error> {
+        let tileset = &tile_request.set;
+        let endpoint = tileset.endpoint();
+        let extension = tileset.file_extension();
+        let zoom = tile_request.zoom;
+        let x = tile_request.tile_x;
+        let y = tile_request.tile_y;
+
+        // https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=AAAAAAAAAAAAAAAAAA
+        let url = format!(
+            "https://api.maptiler.com/tiles/{}/{}/{}/{}.{}?key={}",
+            endpoint, zoom, x, y, extension, self.api_key
+        );
+
+        // Perform the actual request
+        let res = reqwest::get(url).await?;
+
+        match res.status() {
+            reqwest::StatusCode::OK => Ok(res.bytes().await?.to_vec()),
+            status => Err(errors::Error::Http(status)),
+        }
+    }
 }
 
 /// A struct that serves as a Maptiler "session", which stores the API key and is used to create
@@ -365,33 +409,18 @@ impl Maptiler {
     /// This may be a little simpler to use so that any type of request can be passed into this
     /// function
     ///
-    pub async fn request(&self, request: impl Into<RequestType>) -> Result<Vec<u8>, errors::Error> {
-        match request.into() {
-            RequestType::TileRequest(tile_request) => self.request_tile(tile_request).await,
+    pub fn create_request(&self, request: impl Into<RequestType>) -> ConstructedRequest {
+        ConstructedRequest {
+            api_key: self.api_key.to_string(),
+            inner: request.into(),
         }
     }
 
     /// Performs a tile request to the Maptiler Cloud API
-    pub async fn request_tile(&self, tile_request: TileRequest) -> Result<Vec<u8>, errors::Error> {
-        let tileset = &tile_request.set;
-        let endpoint = tileset.endpoint();
-        let extension = tileset.file_extension();
-        let zoom = tile_request.zoom;
-        let x = tile_request.tile_x;
-        let y = tile_request.tile_y;
-
-        // https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=AAAAAAAAAAAAAAAAAA
-        let url = format!(
-            "https://api.maptiler.com/tiles/{}/{}/{}/{}.{}?key={}",
-            endpoint, zoom, x, y, extension, self.api_key
-        );
-
-        // Perform the actual request
-        let res = reqwest::get(url).await?;
-
-        match res.status() {
-            reqwest::StatusCode::OK => Ok(res.bytes().await?.to_vec()),
-            status => Err(errors::Error::Http(status)),
+    pub fn create_tile_request(&self, tile_request: TileRequest) -> ConstructedRequest {
+        ConstructedRequest {
+            api_key: self.api_key.to_string(),
+            inner: RequestType::TileRequest(tile_request),
         }
     }
 }

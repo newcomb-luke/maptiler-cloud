@@ -27,8 +27,11 @@ async fn main() {
         zoom
     ).unwrap();
 
-    // Perform the request (make the API call)
-    let satellite_jpg = maptiler.request(tile_request).await.unwrap();
+    // Create the request using the Maptiler session
+    let constructed = maptiler.create_request(tile_request);
+
+    // Actually perform the request to get the data
+    let satellite_jpg = constructed.execute().await.unwrap();
 
     // Check for JPEG file magic to make sure we got an image
     assert_eq!(&satellite_jpg[0..3], &[0xFF, 0xD8, 0xFF]);
