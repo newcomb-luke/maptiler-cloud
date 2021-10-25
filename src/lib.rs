@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 /// Rust bindings for the [Maptiler Cloud API](https://cloud.maptiler.com/maps/)
 ///
@@ -353,6 +353,7 @@ pub enum RequestType {
 pub struct ConstructedRequest {
     api_key: String,
     inner: RequestType,
+    client: Arc<reqwest::Client>,
 }
 
 impl ConstructedRequest {
@@ -378,7 +379,7 @@ impl ConstructedRequest {
         );
 
         // Perform the actual request
-        let res = reqwest::get(url).await?;
+        let res = self.client.get(url).send().await?;
 
         match res.status() {
             reqwest::StatusCode::OK => Ok(res.bytes().await?.to_vec()),
@@ -391,17 +392,33 @@ impl ConstructedRequest {
 /// requests
 pub struct Maptiler {
     api_key: String,
+    client: Arc<reqwest::Client>,
 }
 
 impl Maptiler {
     /// Initializes this Maptiler Cloud API session
-    pub fn new<S>(api_key: S) -> Self
+    pub fn new<S>(api_key: S) -> Result<Self, errors::Error>
     where
         S: Into<String>,
     {
-        Self {
+        Ok(Self {
             api_key: api_key.into(),
-        }
+            client: Arc::new(reqwest::Client::builder().build()?),
+        })
+    }
+
+    /// Initializes this Maptiler Cloud API session, with a user provided [`reqwest::Client`]
+    pub fn new_with_client<S>(
+        api_key: S,
+        client: Arc<reqwest::Client>,
+    ) -> Result<Self, errors::Error>
+    where
+        S: Into<String>,
+    {
+        Ok(Self {
+            api_key: api_key.into(),
+            client,
+        })
     }
 
     /// Performs a generic request to the Maptiler Cloud API
@@ -413,6 +430,7 @@ impl Maptiler {
         ConstructedRequest {
             api_key: self.api_key.to_string(),
             inner: request.into(),
+            client: self.client.clone(),
         }
     }
 
@@ -421,6 +439,7 @@ impl Maptiler {
         ConstructedRequest {
             api_key: self.api_key.to_string(),
             inner: RequestType::TileRequest(tile_request),
+            client: self.client.clone(),
         }
     }
 }
