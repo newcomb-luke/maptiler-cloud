@@ -5,6 +5,7 @@ authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 description = "A simple Rust wrapper library around the Maptiler Cloud API"
 license = "MIT"
 edition = "2018"
+repository = "https://github.com/newcomb-luke/maptiler-cloud"
 
 [dependencies]
 reqwest = "0.11"
