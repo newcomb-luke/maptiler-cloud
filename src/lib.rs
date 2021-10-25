@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 /// Rust bindings for the [Maptiler Cloud API](https://cloud.maptiler.com/maps/)
 ///
@@ -7,12 +7,12 @@ use std::fmt::Display;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// #[tokio::main]
 /// async fn main() {
 ///     // Create a new Maptiler Cloud session
 ///     // Use your own API key from Maptiler Cloud
-///     let maptiler = maptiler_cloud::Maptiler::new("placeholder api key");
+///     let maptiler = maptiler_cloud::Maptiler::new("placeholder api key").unwrap();
 ///
 ///     // Create a new tile request
 ///     let x = 2;
@@ -351,8 +351,9 @@ pub enum RequestType {
 /// can be directly await-ed using execute()
 #[derive(Debug, Clone)]
 pub struct ConstructedRequest {
-    api_key: String,
+    api_key: Arc<String>,
     inner: RequestType,
+    client: Arc<reqwest::Client>,
 }
 
 impl ConstructedRequest {
@@ -374,11 +375,11 @@ impl ConstructedRequest {
         // https://api.maptiler.com/tiles/satellite/{z}/{x}/{y}.jpg?key=AAAAAAAAAAAAAAAAAA
         let url = format!(
             "https://api.maptiler.com/tiles/{}/{}/{}/{}.{}?key={}",
-            endpoint, zoom, x, y, extension, self.api_key
+            endpoint, zoom, x, y, extension, &self.api_key
         );
 
         // Perform the actual request
-        let res = reqwest::get(url).await?;
+        let res = self.client.get(url).send().await?;
 
         match res.status() {
             reqwest::StatusCode::OK => Ok(res.bytes().await?.to_vec()),
@@ -390,18 +391,34 @@ impl ConstructedRequest {
 /// A struct that serves as a Maptiler "session", which stores the API key and is used to create
 /// requests
 pub struct Maptiler {
-    api_key: String,
+    api_key: Arc<String>,
+    client: Arc<reqwest::Client>,
 }
 
 impl Maptiler {
     /// Initializes this Maptiler Cloud API session
-    pub fn new<S>(api_key: S) -> Self
+    pub fn new<S>(api_key: S) -> Result<Self, errors::Error>
     where
         S: Into<String>,
     {
-        Self {
-            api_key: api_key.into(),
-        }
+        Ok(Self {
+            api_key: Arc::new(api_key.into()),
+            client: Arc::new(reqwest::Client::builder().build()?),
+        })
+    }
+
+    /// Initializes this Maptiler Cloud API session, with a user provided [`reqwest::Client`]
+    pub fn new_with_client<S>(
+        api_key: S,
+        client: Arc<reqwest::Client>,
+    ) -> Result<Self, errors::Error>
+    where
+        S: Into<String>,
+    {
+        Ok(Self {
+            api_key: Arc::new(api_key.into()),
+            client,
+        })
     }
 
     /// Performs a generic request to the Maptiler Cloud API
@@ -411,16 +428,18 @@ impl Maptiler {
     ///
     pub fn create_request(&self, request: impl Into<RequestType>) -> ConstructedRequest {
         ConstructedRequest {
-            api_key: self.api_key.to_string(),
+            api_key: Arc::clone(&self.api_key),
             inner: request.into(),
+            client: self.client.clone(),
         }
     }
 
     /// Performs a tile request to the Maptiler Cloud API
     pub fn create_tile_request(&self, tile_request: TileRequest) -> ConstructedRequest {
         ConstructedRequest {
-            api_key: self.api_key.to_string(),
+            api_key: Arc::clone(&self.api_key),
             inner: RequestType::TileRequest(tile_request),
+            client: self.client.clone(),
         }
     }
 }

@@ -6,7 +6,7 @@ use std::env;
 async fn get_tile() {
     let api_key = env::var("MAPTILER_KEY").expect("Environment variable MAPTILER_KEY not set");
 
-    let maptiler = Maptiler::new(api_key);
+    let maptiler = Maptiler::new(api_key).unwrap();
 
     // Gets a satellite view, with zoom 0 (the whole world)
     // The X and Y coordinates of this type must be 0, 0, because there is only one tile in the set
