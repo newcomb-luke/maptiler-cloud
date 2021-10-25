@@ -13,7 +13,7 @@ X and Y coordinates are specified, and a zoom level is specified.
 async fn main() {
     // Create a new Maptiler Cloud session
     // Use your own API key from Maptiler Cloud
-    let maptiler = maptiler_cloud::Maptiler::new("placeholder api key");
+    let maptiler = maptiler_cloud::Maptiler::new("placeholder api key").unwrap();
 
     // Create a new tile request
     let x = 2;
